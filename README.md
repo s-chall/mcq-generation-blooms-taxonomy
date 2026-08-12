@@ -30,4 +30,4 @@ This repo contains the analysis code and paper behind an AI pipeline that:
 
 ## Authors
 
-Kevin Hwang, Sai Challagundla, Maryam Alomair, Fow-Sen Choe, Lujie Karen Chen - Glenelg High School and University of Maryland, Baltimore County.
+Kevin Hwang, Sai Challagundla, Maryam Alomair, Fow-Sen Choe, Lujie Karen Chen
