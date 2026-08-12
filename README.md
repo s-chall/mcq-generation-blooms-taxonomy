@@ -30,4 +30,4 @@ This repo contains the analysis code and paper behind an AI pipeline that:
 
 ## Authors
 
-Kevin Hwang, Sai Challagundla, Maryam Alomair, Fow-Sen Choe, Lujie Karen Chen
+Kevin Hwang, Sai Challagundla, Maryam Alomair, Fow-Sen Choa, Lujie Karen Chen
