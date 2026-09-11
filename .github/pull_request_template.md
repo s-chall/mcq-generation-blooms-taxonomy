@@ -9,6 +9,7 @@
 ## Verification
 
 - [ ] `make verify` passes locally
+- [ ] `make db-test` passes when database behavior changes
 - [ ] New or changed business rules have automated tests
 - [ ] Documentation matches the implemented architecture
 - [ ] No secret, private research data, or unsupported metric is included

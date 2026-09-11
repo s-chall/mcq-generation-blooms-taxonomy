@@ -31,6 +31,7 @@ Prerequisites:
 - Python 3.11 or newer
 - GNU Make
 - Optional: [`uv`](https://docs.astral.sh/uv/) for an isolated environment
+- Docker with Compose for PostgreSQL verification
 
 Verify the repository with the system Python:
 
@@ -58,16 +59,26 @@ contract:
 python3 -m blooms_analysis validate data/demo_questions.csv
 ```
 
+Apply the PostgreSQL migrations twice and run the database integration tests:
+
+```bash
+make db-test
+```
+
 ## Repository contents
 
 - `blooms_analysis/` — shared CSV validation and summary logic.
 - `data/demo_questions.csv` — valid hand-authored fixture used by tests and CI.
 - `data/sample_generated_questions.csv` — unchanged legacy research sample.
+- `db/migrations/` — versioned PostgreSQL schema changes.
+- `db/queries/` — worker-safe operational SQL and research summary queries.
+- `db/tests/` — constraint, deduplication, index, and query integration tests.
 - `notebooks/` — local, repository-relative examples without private Drive paths.
 - `tests/` — contract and regression tests, including detection of the duplicated
   answer choices in the legacy sample.
 - `docs/data-contract.md` — field definitions and public-data limitations.
 - `docs/architecture.md` — implemented boundary and planned application design.
+- `docs/database.md` — schema decisions, query behavior, and index rationale.
 - `docs/resume-evidence.md` — claim-by-claim evidence ledger updated with each PR.
 - `poster/poster.png` — conference poster associated with the research.
 
@@ -84,7 +95,8 @@ dataset.
 
 ## Application roadmap
 
-The intended product extension will let a researcher submit source material,
+The versioned PostgreSQL job model and transactional outbox schema are now
+implemented. The intended product extension will let a researcher submit source material,
 generate batches asynchronously, inspect Bloom and IWF evaluations, review or edit
 questions, retry failed work, and export approved questions. The target system is
 a React/TypeScript portal, Node.js API, PostgreSQL job store, message queue, and

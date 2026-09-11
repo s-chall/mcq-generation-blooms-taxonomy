@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: setup test validate analyze verify
+.PHONY: setup test validate analyze verify db-test verify-all
 
 setup:
 	uv sync --frozen
@@ -15,3 +15,8 @@ analyze:
 	$(PYTHON) -m blooms_analysis summarize data/demo_questions.csv
 
 verify: test validate analyze
+
+db-test:
+	./scripts/test_database.sh
+
+verify-all: verify db-test
