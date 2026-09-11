@@ -1,33 +1,98 @@
-# Towards AI-Assisted Multiple Choice Question Generation and Quality Evaluation at Scale
+# Bloom's Taxonomy Question Generation and Evaluation
 
-Research code and materials from a study on using GPT-3.5 to generate Bloom's-Taxonomy-aligned multiple choice questions (MCQs) for college-level chemistry and biology, and evaluating their quality both automatically and against a subject-matter expert.
+Research artifacts and a reproducible public analysis foundation for generating
+and evaluating Bloom's-Taxonomy-aligned multiple-choice questions in introductory
+chemistry and biology.
 
-## The problem
+> **Current status:** This repository can validate and summarize its public demo
+> dataset. The API, asynchronous workers, message queue, web interface, and cloud
+> deployment described in the roadmap are not implemented yet.
 
-Writing good multiple choice questions by hand is slow, and reusing a small question bank leads to item repetition, which puts test security and reliability at risk, especially in high-stakes assessments. Prior work has used language models to generate questions, but none of it explicitly targeted Bloom's Taxonomy levels or validated whether a model actually produced the requested cognitive level.
+## Research question
 
-## What this project does
+Writing high-quality MCQs by hand is slow, while repeated questions can weaken
+assessment reliability and test security. The associated study investigated
+whether GPT-3.5 could generate MCQs at requested Bloom levels and whether automated
+Bloom classification and item-writing-guideline checks agreed with an experienced
+teacher.
 
-This repo contains the analysis code and paper behind an AI pipeline that:
+The study reported 83.79% held-out accuracy and an 83.69% weighted F1 score for
+its Bloom classifier. Of 57 questions reviewed by a subject-matter expert, 12 were
+rated suitable for classroom use while the automated IWF evaluation rated 24 as
+high quality. These are publication results, not results recalculated from the
+small public fixture in this repository.
 
-- Generates MCQs at each Bloom's Taxonomy level (Remember through Create) using zero-shot prompting with GPT-3.5-turbo, based on excerpts from OpenStax Chemistry 2e and Biology 2e.
-- Automatically flags common item-writing flaws (IWFs) in each question, replicating an NLP-based detector across 19 flaw types drawn from 31 item-writing guidelines.
-- Classifies each question's actual Bloom's level with a RoBERTa + CNN model, trained on 2,522 labeled questions (90/10 train/test split), to check whether the model followed the prompt.
-- Compares machine judgments against a domain expert with 28+ years of STEM teaching experience, who rated a random sample of 57 of the 120 generated questions.
+See [publication provenance](docs/publications.md) for the paper and related work.
 
-## Results
+## Run the public analysis
 
-- The Bloom's-level classifier reached 83.79% accuracy and an 83.69% weighted F1 score on held-out questions.
-- GPT-3.5 was most reliable at generating "Remember"-level questions and least reliable at higher-order levels such as "Analyze" and "Synthesis," where alignment with the intended taxonomy level dropped.
-- Human and automated quality judgments diverged: the domain expert rated 21% of questions as high quality, while the automated IWF-based check rated 42% as high quality, pointing to a real gap between rule-based and expert evaluation.
+Prerequisites:
+
+- Python 3.11 or newer
+- GNU Make
+- Optional: [`uv`](https://docs.astral.sh/uv/) for an isolated environment
+
+Verify the repository with the system Python:
+
+```bash
+make verify
+```
+
+Or create a locked environment first:
+
+```bash
+make setup
+uv run make verify PYTHON=python
+```
+
+Generate a JSON summary:
+
+```bash
+python3 -m blooms_analysis summarize data/demo_questions.csv
+```
+
+The validation command exits unsuccessfully when a dataset violates the public
+contract:
+
+```bash
+python3 -m blooms_analysis validate data/demo_questions.csv
+```
 
 ## Repository contents
 
-- `notebooks/AE_Analysis.ipynb` - exploratory analysis of pipeline pass rates and Bloom's-level alignment, including Sankey diagrams and pass-rate charts.
-- `notebooks/CHI_Square_Test.ipynb` - chi-square independence test relating question usability ratings to the number of item-writing flaws detected.
-- `data/sample_generated_questions.csv` - a sample of the generated question set, including taxonomy labels and item-writing-flaw flags.
-- `poster/poster.png` - the conference poster summarizing this work.
+- `blooms_analysis/` — shared CSV validation and summary logic.
+- `data/demo_questions.csv` — valid hand-authored fixture used by tests and CI.
+- `data/sample_generated_questions.csv` — unchanged legacy research sample.
+- `notebooks/` — local, repository-relative examples without private Drive paths.
+- `tests/` — contract and regression tests, including detection of the duplicated
+  answer choices in the legacy sample.
+- `docs/data-contract.md` — field definitions and public-data limitations.
+- `docs/architecture.md` — implemented boundary and planned application design.
+- `docs/resume-evidence.md` — claim-by-claim evidence ledger updated with each PR.
+- `poster/poster.png` — conference poster associated with the research.
+
+## Data limitations
+
+The full training data, complete generated-question dataset, model artifacts, and
+human-evaluation file used by the paper are not included. The public analysis does
+not claim to reproduce the paper's metrics. The legacy sample also contains an
+export defect in which each correct answer is repeated as `distractor1`; it is
+retained unchanged for provenance and covered by a regression test.
+
+See the [data contract](docs/data-contract.md) before adding or consuming a new
+dataset.
+
+## Application roadmap
+
+The intended product extension will let a researcher submit source material,
+generate batches asynchronously, inspect Bloom and IWF evaluations, review or edit
+questions, retry failed work, and export approved questions. The target system is
+a React/TypeScript portal, Node.js API, PostgreSQL job store, message queue, and
+idempotent Python workers deployed as containers.
+
+Planned features are documented as plans until working code and integration tests
+are merged. See the [architecture note](docs/architecture.md).
 
 ## Authors
 
-Kevin Hwang, Sai Challagundla, Maryam Alomair, Fow-Sen Choa, Lujie Karen Chen
+Kevin Hwang, Sai Challagundla, Maryam Alomair, Fow-Sen Choa, and Lujie Karen Chen
