@@ -23,3 +23,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Verify public data and analysis
         run: make verify PYTHON=python
+
+  postgres:
+    name: PostgreSQL migrations and integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify schema, constraints, indexes, and queries
+        run: make db-test

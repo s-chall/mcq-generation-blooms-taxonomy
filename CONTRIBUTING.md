@@ -7,6 +7,7 @@ reviewed independently.
 ## Before opening a pull request
 
 1. Run `make verify` from the repository root.
+   Run `make db-test` as well when changing migrations, SQL, or database behavior.
 2. Update documentation when behavior or the architecture boundary changes.
 3. Add a test for every business rule or corrected defect.
 4. Update `docs/resume-evidence.md` only when working code and passing tests support
