@@ -4,9 +4,10 @@ Research artifacts and a reproducible public analysis foundation for generating
 and evaluating Bloom's-Taxonomy-aligned multiple-choice questions in introductory
 chemistry and biology.
 
-> **Current status:** This repository can validate and summarize its public demo
-> dataset. The API, asynchronous workers, message queue, web interface, and cloud
-> deployment described in the roadmap are not implemented yet.
+> **Current status:** This repository validates and summarizes its public demo
+> dataset and implements a tested TypeScript job API backed by PostgreSQL. The
+> asynchronous workers, message queue, web interface, and cloud deployment in the
+> roadmap are not implemented yet.
 
 ## Research question
 
@@ -32,6 +33,7 @@ Prerequisites:
 - GNU Make
 - Optional: [`uv`](https://docs.astral.sh/uv/) for an isolated environment
 - Docker with Compose for PostgreSQL verification
+- Node.js 24 for the API build and tests
 
 Verify the repository with the system Python:
 
@@ -65,6 +67,22 @@ Apply the PostgreSQL migrations twice and run the database integration tests:
 make db-test
 ```
 
+Install locked API dependencies, compile TypeScript, and run request-level tests:
+
+```bash
+npm ci
+make api-test
+```
+
+Run the API against an isolated PostgreSQL instance:
+
+```bash
+make api-integration-test
+```
+
+See the [job API guide](docs/api.md) for the endpoint contract, idempotency
+behavior, container startup, and example requests.
+
 ## Repository contents
 
 - `blooms_analysis/` — shared CSV validation and summary logic.
@@ -73,12 +91,14 @@ make db-test
 - `db/migrations/` — versioned PostgreSQL schema changes.
 - `db/queries/` — worker-safe operational SQL and research summary queries.
 - `db/tests/` — constraint, deduplication, index, and query integration tests.
+- `services/api/` — TypeScript HTTP API, PostgreSQL repository, and tests.
 - `notebooks/` — local, repository-relative examples without private Drive paths.
 - `tests/` — contract and regression tests, including detection of the duplicated
   answer choices in the legacy sample.
 - `docs/data-contract.md` — field definitions and public-data limitations.
 - `docs/architecture.md` — implemented boundary and planned application design.
 - `docs/database.md` — schema decisions, query behavior, and index rationale.
+- `docs/api.md` — endpoints, transaction and idempotency rules, and local use.
 - `docs/resume-evidence.md` — claim-by-claim evidence ledger updated with each PR.
 - `poster/poster.png` — conference poster associated with the research.
 
@@ -95,12 +115,12 @@ dataset.
 
 ## Application roadmap
 
-The versioned PostgreSQL job model and transactional outbox schema are now
-implemented. The intended product extension will let a researcher submit source material,
-generate batches asynchronously, inspect Bloom and IWF evaluations, review or edit
-questions, retry failed work, and export approved questions. The target system is
-a React/TypeScript portal, Node.js API, PostgreSQL job store, message queue, and
-idempotent Python workers deployed as containers.
+The versioned PostgreSQL model, transactional outbox schema, and Node.js/TypeScript
+job-submission API are implemented. The intended product extension will generate
+batches asynchronously, inspect Bloom and IWF evaluations, review or edit questions,
+retry failed work, and export approved questions. The target system also includes a
+React/TypeScript portal, message queue, and idempotent Python workers deployed as
+containers.
 
 Planned features are documented as plans until working code and integration tests
 are merged. See the [architecture note](docs/architecture.md).

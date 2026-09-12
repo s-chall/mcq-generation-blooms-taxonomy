@@ -6,6 +6,11 @@ creates source documents, batch jobs, individual work items, questions, automate
 evaluations, human reviews, transactional outbox events, and processed-message
 deduplication records.
 
+Migration `002_add_job_request_fingerprint.sql` adds the normalized-request hash
+used by the API. The globally unique idempotency key identifies a logical request;
+the fingerprint distinguishes a legitimate retry from accidental reuse of that key
+for different work.
+
 ## Business rules enforced by the database
 
 - A job requests between 1 and 1,000 questions and has a unique idempotency key.

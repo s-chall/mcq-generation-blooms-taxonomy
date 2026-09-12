@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: setup test validate analyze verify db-test verify-all
+.PHONY: setup test validate analyze verify api-test api-integration-test db-test verify-all
 
 setup:
 	uv sync --frozen
@@ -19,4 +19,10 @@ verify: test validate analyze
 db-test:
 	./scripts/test_database.sh
 
-verify-all: verify db-test
+api-test:
+	npm test
+
+api-integration-test:
+	./scripts/test_api_integration.sh
+
+verify-all: verify api-test db-test api-integration-test
