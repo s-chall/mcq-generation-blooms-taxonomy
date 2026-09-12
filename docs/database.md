@@ -11,6 +11,13 @@ used by the API. The globally unique idempotency key identifies a logical reques
 the fingerprint distinguishes a legitimate retry from accidental reuse of that key
 for different work.
 
+Migration `003_add_delivery_leases.sql` adds outbox publisher leases and two
+single-item recovery functions. `claim_outbox_events` lets another publisher
+reclaim an unpublished event after an interrupted publisher's lease expires.
+`claim_job_item` claims the item named by an SQS event or reclaims an expired
+`RUNNING` lease. `refresh_generation_job_status` derives the parent state after an
+item succeeds or fails.
+
 ## Business rules enforced by the database
 
 - A job requests between 1 and 1,000 questions and has a unique idempotency key.
@@ -20,12 +27,12 @@ for different work.
 - A generated question has exactly three non-empty distractors, none equal to the
   correct answer after case and whitespace normalization.
 - Evaluators may record at most one result per question and evaluator version.
-- A consumer can record a queue message only once.
+- A consumer can record a logical outbox event ID only once.
 
 These constraints complement API validation. They protect the data even when a
 retrying worker or a future administrative script writes directly to PostgreSQL.
 
-## Worker claim query
+## Worker claim queries
 
 The `claim_job_items` database function locks only the rows selected by one worker
 and uses `FOR UPDATE SKIP LOCKED`. Concurrent workers can therefore claim different
@@ -35,6 +42,17 @@ worker lease and increments the attempt count in the same statement.
 `db/queries/claim_job_items.sql` is the parameterized application call to this
 function. Keeping the multi-step claim operation inside PostgreSQL makes its
 transaction boundary explicit and allows integration tests to exercise it directly.
+
+The queue consumer uses `claim_job_item` because each message names one work item.
+The generated question, successful item transition, processed-event record, and
+parent-job refresh commit in one transaction. If the process stops after that
+commit but before deleting the SQS message, the next delivery finds the processed
+event ID and acknowledges it without generating another question.
+
+Failures clear the worker lease and move the item to `RETRY` with exponential
+backoff. The final configured attempt moves it to `FAILED` and records the event as
+processed. An interrupted process does neither, so a replacement worker can claim
+the expired `RUNNING` lease.
 
 ## Partial indexes
 
@@ -80,3 +98,9 @@ make db-test
 The second migration pass verifies that the migration ledger prevents accidental
 reapplication. The test environment uses an isolated Docker Compose project and
 removes its containers and volumes when the run finishes.
+
+Run the end-to-end lease and deduplication scenarios with:
+
+```bash
+make worker-integration-test
+```

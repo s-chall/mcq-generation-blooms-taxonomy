@@ -40,6 +40,21 @@ VALUES
         'Analyze'
     );
 
+INSERT INTO outbox_events (
+    id,
+    aggregate_type,
+    aggregate_id,
+    event_type,
+    payload
+)
+VALUES (
+    '00000000-0000-0000-0000-000000000007',
+    'job_item',
+    '00000000-0000-0000-0000-000000000004',
+    'generation_job_item.created',
+    '{"itemId": "00000000-0000-0000-0000-000000000004"}'
+);
+
 INSERT INTO questions (
     id,
     job_item_id,
@@ -93,6 +108,11 @@ VALUES
     );
 
 SELECT * FROM claim_job_items(1, 'integration-test-worker');
+SELECT * FROM claim_job_item(
+    '00000000-0000-0000-0000-000000000004',
+    'specific-worker'
+);
+SELECT * FROM claim_outbox_events(1, 'integration-test-publisher');
 
 DO $$
 BEGIN
@@ -196,6 +216,28 @@ BEGIN
           AND pg_index.indpred IS NOT NULL
     ) THEN
         RAISE EXCEPTION 'worker-ready partial index is missing or not partial';
+    END IF;
+
+    IF (
+        SELECT count(*)
+        FROM job_items
+        WHERE id = '00000000-0000-0000-0000-000000000004'
+          AND status = 'RUNNING'
+          AND lease_owner = 'specific-worker'
+          AND attempt_count = 1
+    ) <> 1 THEN
+        RAISE EXCEPTION 'specific item claim did not record the worker lease';
+    END IF;
+
+    IF (
+        SELECT count(*)
+        FROM outbox_events
+        WHERE id = '00000000-0000-0000-0000-000000000007'
+          AND lease_owner = 'integration-test-publisher'
+          AND lease_expires_at IS NOT NULL
+          AND attempt_count = 1
+    ) <> 1 THEN
+        RAISE EXCEPTION 'outbox claim did not record the publisher lease';
     END IF;
 END;
 $$;
