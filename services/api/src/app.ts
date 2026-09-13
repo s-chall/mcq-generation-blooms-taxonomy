@@ -2,11 +2,14 @@ import Fastify, { type FastifyInstance } from "fastify";
 
 import {
   BLOOM_LEVELS,
+  REVIEW_DECISIONS,
   type CreateJobInput,
   type CreateSourceInput,
   type JobRepository,
+  type ReviewQuestionInput,
 } from "./domain.js";
 import { IdempotencyConflictError, NotFoundError } from "./errors.js";
+import { approvedQuestionsCsv } from "./csv.js";
 
 const uuidPattern = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$";
 
@@ -35,6 +38,31 @@ const jobBodySchema = {
       maxItems: 6,
       uniqueItems: true,
       items: { type: "string", enum: BLOOM_LEVELS },
+    },
+  },
+} as const;
+
+const reviewerQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["reviewerId"],
+  properties: {
+    reviewerId: { type: "string", minLength: 1, maxLength: 100 },
+  },
+} as const;
+
+const reviewBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["reviewerId", "decision", "assignedBloom", "notes"],
+  properties: {
+    reviewerId: { type: "string", minLength: 1, maxLength: 100 },
+    decision: { type: "string", enum: REVIEW_DECISIONS },
+    assignedBloom: {
+      anyOf: [{ type: "string", enum: BLOOM_LEVELS }, { type: "null" }],
+    },
+    notes: {
+      anyOf: [{ type: "string", maxLength: 2000 }, { type: "null" }],
     },
   },
 } as const;
@@ -101,6 +129,67 @@ export function buildApp(repository: JobRepository, logger = false): FastifyInst
     async (request, reply) => {
       const job = await repository.getJob(request.params.id);
       return job ?? reply.code(404).send({ error: "Job not found" });
+    },
+  );
+
+  app.get<{ Params: { id: string }; Querystring: { reviewerId: string } }>(
+    "/v1/jobs/:id/questions",
+    {
+      schema: {
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", pattern: uuidPattern } },
+        },
+        querystring: reviewerQuerySchema,
+      },
+    },
+    async (request, reply) => {
+      const job = await repository.getJob(request.params.id);
+      if (!job) return reply.code(404).send({ error: "Job not found" });
+      return repository.listQuestions(request.params.id, request.query.reviewerId);
+    },
+  );
+
+  app.put<{ Params: { id: string }; Body: ReviewQuestionInput }>(
+    "/v1/questions/:id/review",
+    {
+      schema: {
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", pattern: uuidPattern } },
+        },
+        body: reviewBodySchema,
+      },
+    },
+    async (request) => repository.reviewQuestion(request.params.id, request.body),
+  );
+
+  app.get<{ Params: { id: string }; Querystring: { reviewerId: string } }>(
+    "/v1/jobs/:id/export.csv",
+    {
+      schema: {
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string", pattern: uuidPattern } },
+        },
+        querystring: reviewerQuerySchema,
+      },
+    },
+    async (request, reply) => {
+      const job = await repository.getJob(request.params.id);
+      if (!job) return reply.code(404).send({ error: "Job not found" });
+      const questions = await repository.listQuestions(
+        request.params.id,
+        request.query.reviewerId,
+      );
+      const csv = approvedQuestionsCsv(questions);
+      return reply
+        .type("text/csv; charset=utf-8")
+        .header("Content-Disposition", `attachment; filename="job-${job.id}-approved.csv"`)
+        .send(csv);
     },
   );
 

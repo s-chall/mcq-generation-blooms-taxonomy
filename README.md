@@ -6,8 +6,10 @@ chemistry and biology.
 
 > **Current status:** This repository validates and summarizes its public demo
 > dataset and implements a tested TypeScript job API plus an SQS-compatible Python
-> worker backed by PostgreSQL. The worker uses a deterministic offline provider;
-> a production model adapter, web interface, and cloud deployment remain planned.
+> worker backed by PostgreSQL. A React/TypeScript portal supports batch submission,
+> progress monitoring, question review, and approved-question export. The worker
+> uses a deterministic offline provider; a production model adapter and cloud
+> deployment remain planned.
 
 ## Research question
 
@@ -33,7 +35,7 @@ Prerequisites:
 - GNU Make
 - Optional: [`uv`](https://docs.astral.sh/uv/) for an isolated environment
 - Docker with Compose for PostgreSQL verification
-- Node.js 24 for the API build and tests
+- Node.js 24 for the API and portal builds and tests
 
 Verify the repository with the system Python:
 
@@ -95,6 +97,24 @@ delivery contract and local runtime configuration.
 See the [job API guide](docs/api.md) for the endpoint contract, idempotency
 behavior, container startup, and example requests.
 
+Build and test the researcher portal:
+
+```bash
+make web-test
+make web-build
+```
+
+Start PostgreSQL, the API, and the portal at `http://localhost:8080`:
+
+```bash
+docker compose up --detach --wait postgres
+docker compose --profile tools run --rm migrate
+docker compose --profile application up --build
+```
+
+See the [researcher portal guide](docs/researcher-portal.md) for the complete
+workflow and its current security and storage boundaries.
+
 ## Repository contents
 
 - `blooms_analysis/` — shared CSV validation and summary logic.
@@ -104,6 +124,8 @@ behavior, container startup, and example requests.
 - `db/queries/` — worker-safe operational SQL and research summary queries.
 - `db/tests/` — constraint, deduplication, index, and query integration tests.
 - `services/api/` — TypeScript HTTP API, PostgreSQL repository, and tests.
+- `services/web/` — React/TypeScript researcher workflow, interaction tests, and
+  non-root production web image.
 - `generation_worker/` — Python outbox publisher, SQS consumer, leased work-item
   processor, and deterministic local provider.
 - `services/worker/` — non-root production worker image.
@@ -115,6 +137,7 @@ behavior, container startup, and example requests.
 - `docs/architecture.md` — implemented boundary and planned application design.
 - `docs/database.md` — schema decisions, query behavior, and index rationale.
 - `docs/api.md` — endpoints, transaction and idempotency rules, and local use.
+- `docs/researcher-portal.md` — portal workflow, component boundary, and local use.
 - `docs/worker.md` — queue delivery, leases, retries, deduplication, and failure
   recovery.
 - `docs/resume-evidence.md` — claim-by-claim evidence ledger updated with each PR.
@@ -133,13 +156,13 @@ dataset.
 
 ## Application roadmap
 
-The versioned PostgreSQL model, transactional outbox, Node.js/TypeScript
-job-submission API, SQS-compatible publisher, and idempotent Python worker are
-implemented. The worker currently proves orchestration and recovery with a
-deterministic provider; connecting a production generation/evaluation model is a
-separate change. The intended product extension will inspect Bloom and IWF
-evaluations, review or edit questions, retry failed work, and export approved
-questions through a React/TypeScript portal deployed on AWS.
+The versioned PostgreSQL model, transactional outbox, Node.js/TypeScript API,
+React/TypeScript review portal, SQS-compatible publisher, and idempotent Python
+worker are implemented. The worker currently proves orchestration and recovery
+with a deterministic provider; connecting a production generation/evaluation
+model is a separate change. Authentication, direct source upload, question-text
+editing, failed-item retry controls, IWF evaluation screens, and AWS deployment
+remain planned.
 
 Planned features are documented as plans until working code and integration tests
 are merged. See the [architecture note](docs/architecture.md).

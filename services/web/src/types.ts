@@ -8,10 +8,7 @@ export const BLOOM_LEVELS = [
 ] as const;
 
 export type BloomLevel = (typeof BLOOM_LEVELS)[number];
-
-export const REVIEW_DECISIONS = ["APPROVED", "REJECTED", "NEEDS_EDIT"] as const;
-
-export type ReviewDecision = (typeof REVIEW_DECISIONS)[number];
+export type ReviewDecision = "APPROVED" | "REJECTED" | "NEEDS_EDIT";
 
 export interface SourceDocument {
   id: string;
@@ -19,20 +16,6 @@ export interface SourceDocument {
   storageUri: string;
   contentSha256: string;
   createdAt: string;
-}
-
-export interface CreateSourceInput {
-  title: string;
-  storageUri: string;
-  contentSha256: string;
-}
-
-export interface CreateJobInput {
-  idempotencyKey: string;
-  sourceDocumentId: string;
-  requestedCount: number;
-  promptVersion: string;
-  targetBlooms: BloomLevel[];
 }
 
 export interface Job {
@@ -44,11 +27,6 @@ export interface Job {
   itemCounts: Record<string, number>;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface CreatedJob {
-  job: Job;
-  replayed: boolean;
 }
 
 export interface HumanReview {
@@ -78,14 +56,4 @@ export interface ReviewQuestionInput {
   decision: ReviewDecision;
   assignedBloom: BloomLevel | null;
   notes: string | null;
-}
-
-export interface JobRepository {
-  checkReadiness(): Promise<void>;
-  createSource(input: CreateSourceInput): Promise<SourceDocument>;
-  createJob(input: CreateJobInput): Promise<CreatedJob>;
-  getJob(id: string): Promise<Job | null>;
-  listQuestions(jobId: string, reviewerId: string): Promise<Question[]>;
-  reviewQuestion(questionId: string, input: ReviewQuestionInput): Promise<HumanReview>;
-  close(): Promise<void>;
 }

@@ -39,6 +39,22 @@ services:
       timeout: 3s
       retries: 15
 
+  web:
+    profiles: [application]
+    build:
+      context: .
+      dockerfile: services/web/Dockerfile
+    ports:
+      - "${BLOOMS_WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
   migrate:
     image: postgres:17.6-bookworm
     profiles: [tools]

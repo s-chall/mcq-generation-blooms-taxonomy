@@ -7,6 +7,9 @@ import {
   type CreateSourceInput,
   type Job,
   type JobRepository,
+  type HumanReview,
+  type Question,
+  type ReviewQuestionInput,
   type SourceDocument,
 } from "./domain.js";
 import { IdempotencyConflictError, NotFoundError } from "./errors.js";
@@ -32,6 +35,32 @@ interface JobRow extends QueryResultRow {
   succeeded_count: string;
   failed_count: string;
   created_at: Date;
+  updated_at: Date;
+}
+
+interface QuestionRow extends QueryResultRow {
+  id: string;
+  job_id: string;
+  ordinal: number;
+  target_bloom: Question["targetBloom"];
+  stem: string;
+  correct_answer: string;
+  distractors: unknown;
+  model_name: string;
+  prompt_version: string;
+  created_at: Date;
+  reviewer_id: string | null;
+  decision: HumanReview["decision"] | null;
+  assigned_bloom: HumanReview["assignedBloom"];
+  notes: string | null;
+  review_updated_at: Date | null;
+}
+
+interface ReviewRow extends QueryResultRow {
+  reviewer_id: string;
+  decision: HumanReview["decision"];
+  assigned_bloom: HumanReview["assignedBloom"];
+  notes: string | null;
   updated_at: Date;
 }
 
@@ -90,6 +119,49 @@ function mapJob(row: JobRow): Job {
     },
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
+  };
+}
+
+function mapReview(row: ReviewRow): HumanReview {
+  return {
+    reviewerId: row.reviewer_id,
+    decision: row.decision,
+    assignedBloom: row.assigned_bloom,
+    notes: row.notes,
+    updatedAt: row.updated_at.toISOString(),
+  };
+}
+
+function mapQuestion(row: QuestionRow): Question {
+  const distractors = row.distractors;
+  if (
+    !Array.isArray(distractors) ||
+    distractors.length !== 3 ||
+    !distractors.every((value) => typeof value === "string")
+  ) {
+    throw new Error(`Question ${row.id} has invalid distractors`);
+  }
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    ordinal: row.ordinal,
+    targetBloom: row.target_bloom,
+    stem: row.stem,
+    correctAnswer: row.correct_answer,
+    distractors: [distractors[0]!, distractors[1]!, distractors[2]!],
+    modelName: row.model_name,
+    promptVersion: row.prompt_version,
+    createdAt: row.created_at.toISOString(),
+    review:
+      row.reviewer_id && row.decision && row.review_updated_at
+        ? mapReview({
+            reviewer_id: row.reviewer_id,
+            decision: row.decision,
+            assigned_bloom: row.assigned_bloom,
+            notes: row.notes,
+            updated_at: row.review_updated_at,
+          })
+        : null,
   };
 }
 
@@ -215,6 +287,67 @@ export class PostgresJobRepository implements JobRepository {
   public async getJob(id: string): Promise<Job | null> {
     const job = await selectJob(this.pool, id);
     return job ? mapJob(job) : null;
+  }
+
+  public async listQuestions(jobId: string, reviewerId: string): Promise<Question[]> {
+    const result = await this.pool.query<QuestionRow>(`
+      SELECT DISTINCT ON (item.id)
+        question.id,
+        item.job_id,
+        item.ordinal,
+        item.target_bloom,
+        question.stem,
+        question.correct_answer,
+        question.distractors,
+        question.model_name,
+        question.prompt_version,
+        question.created_at,
+        review.reviewer_id,
+        review.decision,
+        review.assigned_bloom,
+        review.notes,
+        review.updated_at AS review_updated_at
+      FROM job_items AS item
+      JOIN questions AS question ON question.job_item_id = item.id
+      LEFT JOIN human_reviews AS review
+        ON review.question_id = question.id
+       AND review.reviewer_id = $2
+      WHERE item.job_id = $1
+      ORDER BY item.id, question.generation_version DESC
+    `, [jobId, reviewerId]);
+    return result.rows.map(mapQuestion).sort((left, right) => left.ordinal - right.ordinal);
+  }
+
+  public async reviewQuestion(
+    questionId: string,
+    input: ReviewQuestionInput,
+  ): Promise<HumanReview> {
+    const result = await this.pool.query<ReviewRow>(`
+      INSERT INTO human_reviews (
+        question_id,
+        reviewer_id,
+        decision,
+        assigned_bloom,
+        notes
+      )
+      SELECT $1, $2, $3, $4, $5
+      FROM questions
+      WHERE id = $1
+      ON CONFLICT (question_id, reviewer_id) DO UPDATE
+      SET decision = EXCLUDED.decision,
+          assigned_bloom = EXCLUDED.assigned_bloom,
+          notes = EXCLUDED.notes
+      RETURNING reviewer_id, decision, assigned_bloom, notes, updated_at
+    `, [
+      questionId,
+      input.reviewerId,
+      input.decision,
+      input.assignedBloom,
+      input.notes,
+    ]);
+    const row = result.rows[0];
+    if (!row) throw new NotFoundError("Question not found");
+    return mapReview(row);
   }
 
   public async close(): Promise<void> {
