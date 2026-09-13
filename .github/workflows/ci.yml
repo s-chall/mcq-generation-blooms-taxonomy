@@ -31,3 +31,23 @@ jobs:
       - uses: actions/checkout@v6
       - name: Verify schema, constraints, indexes, and queries
         run: make db-test
+
+  node-api:
+    name: Node.js API and PostgreSQL integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Compile and run request-level tests
+        run: make api-test
+      - name: Run API integration tests against PostgreSQL
+        run: make api-integration-test
+      - name: Build the production API image
+        run: docker compose --profile application build api
+      - name: Audit production dependencies
+        run: npm audit --omit=dev

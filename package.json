@@ -1,0 +1,16 @@
+{
+  "name": "blooms-taxonomy-platform",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "services/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:api:integration": "npm run test:integration --workspace @blooms/api"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  }
+}

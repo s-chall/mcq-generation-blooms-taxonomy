@@ -15,6 +15,30 @@ services:
       timeout: 3s
       retries: 15
 
+  api:
+    profiles: [application]
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://blooms:blooms-local-only@postgres:5432/blooms
+      PORT: 3000
+    ports:
+      - "${BLOOMS_API_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - --input-type=module
+        - --eval
+        - fetch('http://localhost:3000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
   migrate:
     image: postgres:17.6-bookworm
     profiles: [tools]

@@ -12,6 +12,7 @@ INSERT INTO generation_jobs (
     id,
     source_document_id,
     idempotency_key,
+    request_fingerprint,
     requested_count,
     prompt_version
 )
@@ -19,6 +20,7 @@ VALUES (
     '00000000-0000-0000-0000-000000000002',
     '00000000-0000-0000-0000-000000000001',
     'test-job-0001',
+    repeat('b', 64),
     2,
     'demo-v1'
 );
@@ -98,11 +100,13 @@ BEGIN
         INSERT INTO generation_jobs (
             source_document_id,
             idempotency_key,
+            request_fingerprint,
             requested_count,
             prompt_version
         ) VALUES (
             '00000000-0000-0000-0000-000000000001',
             'invalid-count',
+            repeat('d', 64),
             0,
             'demo-v1'
         );
@@ -115,11 +119,13 @@ BEGIN
         INSERT INTO generation_jobs (
             source_document_id,
             idempotency_key,
+            request_fingerprint,
             requested_count,
             prompt_version
         ) VALUES (
             '00000000-0000-0000-0000-000000000001',
             'test-job-0001',
+            repeat('c', 64),
             1,
             'demo-v1'
         );
