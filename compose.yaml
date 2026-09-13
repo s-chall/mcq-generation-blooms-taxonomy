@@ -56,17 +56,19 @@ services:
       retries: 15
 
   migrate:
-    image: postgres:17.6-bookworm
+    build:
+      context: .
+      dockerfile: services/migrate/Dockerfile
     profiles: [tools]
-    working_dir: /workspace
     environment:
-      DATABASE_URL: postgresql://blooms:blooms-local-only@postgres:5432/blooms
-    volumes:
-      - .:/workspace:ro
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: blooms
+      PGUSER: blooms
+      PGPASSWORD: blooms-local-only
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["sh", "scripts/migrate.sh"]
 
   db-test:
     image: postgres:17.6-bookworm

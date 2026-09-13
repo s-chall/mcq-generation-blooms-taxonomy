@@ -89,6 +89,12 @@ curl --request POST http://localhost:3000/v1/jobs \
   }'
 ```
 
+The API accepts either `DATABASE_URL` or the standard `PGHOST`, `PGPORT`,
+`PGDATABASE`, `PGUSER`, and `PGPASSWORD` fields. The latter lets the AWS task
+definition inject RDS-managed credentials from Secrets Manager without assembling
+or storing a connection URL. `PGSSLMODE=require` enables encrypted transport in
+that environment.
+
 ## Deliberate boundary
 
 The adjacent Python service publishes these outbox events and processes them with

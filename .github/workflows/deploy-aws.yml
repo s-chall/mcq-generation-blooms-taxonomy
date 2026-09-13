@@ -1,0 +1,156 @@
+name: Deploy AWS demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      application_count:
+        description: Number of portal/API tasks after migration
+        required: true
+        default: "1"
+        type: choice
+        options: ["0", "1", "2"]
+      worker_count:
+        description: Number of publisher and worker tasks after migration
+        required: true
+        default: "1"
+        type: choice
+        options: ["0", "1", "2"]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: blooms-taxonomy-aws-demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build, migrate, deploy, and verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: demo
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      TF_VAR_environment: demo
+      TF_VAR_image_tag: ${{ github.sha }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Configure short-lived AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: blooms-${{ github.run_id }}
+
+      - uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: 1.15.9
+          terraform_wrapper: false
+
+      - name: Validate the one-time bootstrap template
+        run: aws cloudformation validate-template --template-body file://infra/bootstrap.yaml
+
+      - name: Log in to Amazon ECR
+        run: |
+          account_id=$(aws sts get-caller-identity --query Account --output text)
+          registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+          echo "REGISTRY=$registry" >> "$GITHUB_ENV"
+          echo "STATE_BUCKET=${account_id}-${AWS_REGION}-blooms-taxonomy-tfstate" >> "$GITHUB_ENV"
+
+      - name: Build and push immutable images
+        run: |
+          push_image() {
+            repository_name=$1
+            dockerfile=$2
+            image_uri="${REGISTRY}/${repository_name}:${GITHUB_SHA}"
+            if aws ecr describe-images --repository-name "$repository_name" \
+              --image-ids "imageTag=${GITHUB_SHA}" >/dev/null 2>&1; then
+              echo "Using existing immutable image $image_uri"
+              return
+            fi
+            docker build --file "$dockerfile" --tag "$image_uri" .
+            docker push "$image_uri"
+          }
+
+          push_image blooms-taxonomy-api services/api/Dockerfile
+          push_image blooms-taxonomy-web services/web/Dockerfile
+          push_image blooms-taxonomy-worker services/worker/Dockerfile
+          push_image blooms-taxonomy-migrate services/migrate/Dockerfile
+
+      - name: Initialize remote Terraform state
+        working-directory: infra/terraform
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="region=${AWS_REGION}"
+          terraform validate
+
+      - name: Deploy infrastructure with tasks stopped
+        working-directory: infra/terraform
+        run: |
+          terraform apply -auto-approve \
+            -var="application_desired_count=0" \
+            -var="worker_desired_count=0"
+
+      - name: Run database migrations as a one-off Fargate task
+        working-directory: infra/terraform
+        run: |
+          cluster=$(terraform output -raw ecs_cluster_name)
+          task_definition=$(terraform output -raw migration_task_definition_arn)
+          security_group=$(terraform output -raw worker_security_group_id)
+          subnets=$(terraform output -json public_subnet_ids)
+          network_configuration=$(jq -nc \
+            --argjson subnet_ids "$subnets" \
+            --arg security_group_id "$security_group" \
+            '{awsvpcConfiguration:{subnets:$subnet_ids,securityGroups:[$security_group_id],assignPublicIp:"ENABLED"}}')
+          task_arn=$(aws ecs run-task \
+            --cluster "$cluster" \
+            --task-definition "$task_definition" \
+            --launch-type FARGATE \
+            --network-configuration "$network_configuration" \
+            --query 'tasks[0].taskArn' \
+            --output text)
+          test -n "$task_arn"
+          test "$task_arn" != "None"
+          aws ecs wait tasks-stopped --cluster "$cluster" --tasks "$task_arn"
+          exit_code=$(aws ecs describe-tasks \
+            --cluster "$cluster" \
+            --tasks "$task_arn" \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text)
+          test "$exit_code" = "0"
+
+      - name: Start services after successful migration
+        working-directory: infra/terraform
+        run: |
+          terraform apply -auto-approve \
+            -var="application_desired_count=${{ inputs.application_count }}" \
+            -var="worker_desired_count=${{ inputs.worker_count }}"
+
+      - name: Wait for ECS services and verify the public endpoint
+        working-directory: infra/terraform
+        run: |
+          cluster=$(terraform output -raw ecs_cluster_name)
+          services=(
+            "$(terraform output -raw application_service_name)"
+            "$(terraform output -raw publisher_service_name)"
+            "$(terraform output -raw worker_service_name)"
+          )
+          aws ecs wait services-stable --cluster "$cluster" --services "${services[@]}"
+          application_url=$(terraform output -raw application_url)
+          curl --fail --show-error --silent \
+            --retry 12 --retry-delay 10 --retry-all-errors \
+            "${application_url}/api/health/ready"
+          echo "### Deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Portal: ${application_url}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image tag: ${GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"

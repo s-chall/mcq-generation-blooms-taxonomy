@@ -9,3 +9,12 @@ services/api/dist/
 services/web/dist/
 .uv-cache/
 work/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

@@ -6,6 +6,7 @@ import socket
 import time
 
 import boto3
+from psycopg.conninfo import make_conninfo
 
 from generation_worker.provider import DeterministicDemoProvider
 from generation_worker.publisher import OutboxPublisher
@@ -30,8 +31,22 @@ def build_queue() -> SqsQueue:
     return SqsQueue(required("SQS_QUEUE_URL"), client)
 
 
+def database_connection_info() -> str:
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        return database_url
+    return make_conninfo(
+        host=required("PGHOST"),
+        port=required("PGPORT"),
+        dbname=required("PGDATABASE"),
+        user=required("PGUSER"),
+        password=required("PGPASSWORD"),
+        sslmode=os.environ.get("PGSSLMODE", "prefer"),
+    )
+
+
 def run(role: str, once: bool) -> None:
-    repository = PostgresRepository(required("DATABASE_URL"))
+    repository = PostgresRepository(database_connection_info())
     queue = build_queue()
     identity = os.environ.get("INSTANCE_ID", socket.gethostname())
 

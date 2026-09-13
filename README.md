@@ -8,8 +8,10 @@ chemistry and biology.
 > dataset and implements a tested TypeScript job API plus an SQS-compatible Python
 > worker backed by PostgreSQL. A React/TypeScript portal supports batch submission,
 > progress monitoring, question review, and approved-question export. The worker
-> uses a deterministic offline provider; a production model adapter and cloud
-> deployment remain planned.
+> uses a deterministic offline provider. Terraform, GitHub OIDC, and a manual
+> deployment workflow define an AWS demo environment; the infrastructure is
+> validated in CI but is not described as deployed until a successful live run
+> is recorded. A production model adapter remains planned.
 
 ## Research question
 
@@ -115,6 +117,17 @@ docker compose --profile application up --build
 See the [researcher portal guide](docs/researcher-portal.md) for the complete
 workflow and its current security and storage boundaries.
 
+Validate the AWS infrastructure without creating resources:
+
+```bash
+make infra-validate
+aws cloudformation validate-template --template-body file://infra/bootstrap.yaml
+```
+
+See the [AWS deployment guide](docs/aws-deployment.md) for the service map,
+one-time OIDC bootstrap, migration-first deployment, verification steps, cost
+boundary, and current evidence status.
+
 ## Repository contents
 
 - `blooms_analysis/` — shared CSV validation and summary logic.
@@ -129,12 +142,17 @@ workflow and its current security and storage boundaries.
 - `generation_worker/` — Python outbox publisher, SQS consumer, leased work-item
   processor, and deterministic local provider.
 - `services/worker/` — non-root production worker image.
+- `services/migrate/` — immutable PostgreSQL migration image used locally and by
+  the AWS deployment workflow.
 - `worker_tests/` — unit and PostgreSQL/SQS failure-injection tests.
+- `infra/` — one-time AWS bootstrap plus tested Terraform for the demo runtime.
 - `notebooks/` — local, repository-relative examples without private Drive paths.
 - `tests/` — contract and regression tests, including detection of the duplicated
   answer choices in the legacy sample.
 - `docs/data-contract.md` — field definitions and public-data limitations.
-- `docs/architecture.md` — implemented boundary and planned application design.
+- `docs/architecture.md` — application and AWS runtime boundaries.
+- `docs/aws-deployment.md` — AWS services, deployment sequence, controls, and
+  evidence limitations.
 - `docs/database.md` — schema decisions, query behavior, and index rationale.
 - `docs/api.md` — endpoints, transaction and idempotency rules, and local use.
 - `docs/researcher-portal.md` — portal workflow, component boundary, and local use.
@@ -161,8 +179,10 @@ React/TypeScript review portal, SQS-compatible publisher, and idempotent Python
 worker are implemented. The worker currently proves orchestration and recovery
 with a deterministic provider; connecting a production generation/evaluation
 model is a separate change. Authentication, direct source upload, question-text
-editing, failed-item retry controls, IWF evaluation screens, and AWS deployment
-remain planned.
+editing, failed-item retry controls, IWF evaluation screens, and a production
+model adapter remain planned. The AWS infrastructure and deployment workflow are
+implemented and tested without resource creation; a live deployment is
+intentionally still unverified.
 
 Planned features are documented as plans until working code and integration tests
 are merged. See the [architecture note](docs/architecture.md).

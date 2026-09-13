@@ -74,3 +74,17 @@ jobs:
         run: make worker-integration-test
       - name: Build the production worker image
         run: docker build --file services/worker/Dockerfile --tag blooms-worker:test .
+
+  aws-infrastructure:
+    name: AWS infrastructure validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: 1.15.9
+          terraform_wrapper: false
+      - name: Format, initialize, and validate Terraform
+        run: make infra-validate
+      - name: Build the production migration image
+        run: docker build --file services/migrate/Dockerfile --tag blooms-migrate:test .
