@@ -6,5 +6,6 @@ __pycache__/
 .ipynb_checkpoints/
 node_modules/
 services/api/dist/
+services/web/dist/
 .uv-cache/
 work/

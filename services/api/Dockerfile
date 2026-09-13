@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY --chown=node:node package.json package-lock.json ./
 COPY --chown=node:node services/api/package.json services/api/package.json
+COPY --chown=node:node services/web/package.json services/web/package.json
 RUN npm ci
 
 COPY --chown=node:node services/api services/api

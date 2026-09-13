@@ -3,5 +3,6 @@
 .venv
 node_modules
 services/api/dist
+services/web/dist
 work
 .uv-cache

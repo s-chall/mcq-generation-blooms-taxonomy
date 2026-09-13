@@ -32,7 +32,7 @@ before(async () => {
 
 after(async () => app.close());
 
-test("creates a job, work items, and per-item outbox events in one transaction", async () => {
+test("persists an idempotent job and reviewer-scoped approved export", async () => {
   const sourceResponse = await app.inject({
     method: "POST",
     url: "/v1/sources",
@@ -142,4 +142,116 @@ test("creates a job, work items, and per-item outbox events in one transaction",
       (SELECT count(*) FROM outbox_events) AS events
   `);
   assert.deepEqual(totals.rows[0], { jobs: "1", items: "3", events: "3" });
+
+  const question = await pool.query<{ id: string }>(`
+    INSERT INTO questions (
+      job_item_id,
+      stem,
+      correct_answer,
+      distractors,
+      model_name,
+      prompt_version
+    )
+    SELECT
+      id,
+      'Which electron configuration matches sodium?',
+      '1s2 2s2 2p6 3s1',
+      '["1s2 2s2 2p5 3s2", "1s2 2s2 2p6", "1s2 2s2 2p6 3s2"]'::jsonb,
+      'integration-provider',
+      'demo-v1'
+    FROM job_items
+    WHERE job_id = $1 AND ordinal = 1
+    RETURNING id
+  `, [first.id]);
+  const questionId = question.rows[0]!.id;
+
+  const initialQuestions = await app.inject({
+    method: "GET",
+    url: `/v1/jobs/${first.id}/questions?reviewerId=faculty-1`,
+  });
+  assert.equal(initialQuestions.statusCode, 200);
+  assert.equal(initialQuestions.json<Array<{ review: unknown }>>()[0]?.review, null);
+
+  const firstReview = await app.inject({
+    method: "PUT",
+    url: `/v1/questions/${questionId}/review`,
+    payload: {
+      reviewerId: "faculty-1",
+      decision: "NEEDS_EDIT",
+      assignedBloom: "Understand",
+      notes: "Use a more diagnostic distractor.",
+    },
+  });
+  assert.equal(firstReview.statusCode, 200);
+
+  const approved = await app.inject({
+    method: "PUT",
+    url: `/v1/questions/${questionId}/review`,
+    payload: {
+      reviewerId: "faculty-1",
+      decision: "APPROVED",
+      assignedBloom: "Remember",
+      notes: "Ready for the item bank.",
+    },
+  });
+  assert.equal(approved.statusCode, 200);
+
+  const rejectedQuestion = await pool.query<{ id: string }>(`
+    INSERT INTO questions (
+      job_item_id,
+      stem,
+      correct_answer,
+      distractors,
+      model_name,
+      prompt_version
+    )
+    SELECT
+      id,
+      'This rejected question must not be exported',
+      'Correct answer',
+      '["Distractor one", "Distractor two", "Distractor three"]'::jsonb,
+      'integration-provider',
+      'demo-v1'
+    FROM job_items
+    WHERE job_id = $1 AND ordinal = 2
+    RETURNING id
+  `, [first.id]);
+  const rejected = await app.inject({
+    method: "PUT",
+    url: `/v1/questions/${rejectedQuestion.rows[0]!.id}/review`,
+    payload: {
+      reviewerId: "faculty-1",
+      decision: "REJECTED",
+      assignedBloom: "Apply",
+      notes: "Not suitable for the item bank.",
+    },
+  });
+  assert.equal(rejected.statusCode, 200);
+
+  const storedReview = await pool.query<{
+    review_count: string;
+    decision: string;
+    assigned_bloom: string;
+  }>(`
+    SELECT
+      count(*) AS review_count,
+      max(decision::text) AS decision,
+      max(assigned_bloom::text) AS assigned_bloom
+    FROM human_reviews
+    WHERE question_id = $1 AND reviewer_id = 'faculty-1'
+  `, [questionId]);
+  assert.deepEqual(storedReview.rows[0], {
+    review_count: "1",
+    decision: "APPROVED",
+    assigned_bloom: "Remember",
+  });
+
+  const exported = await app.inject({
+    method: "GET",
+    url: `/v1/jobs/${first.id}/export.csv?reviewerId=faculty-1`,
+  });
+  assert.equal(exported.statusCode, 200);
+  assert.match(exported.body, /Which electron configuration matches sodium\?/);
+  assert.match(exported.body, /Ready for the item bank\./);
+  assert.doesNotMatch(exported.body, /This rejected question must not be exported/);
 });

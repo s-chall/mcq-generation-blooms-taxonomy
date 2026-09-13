@@ -2,7 +2,7 @@
 
 ## Implemented in this repository
 
-The current public foundation has five layers:
+The current public foundation has six layers:
 
 1. Versioned CSV fixtures governed by an explicit data contract.
 2. A dependency-free Python validation and summary module used by the command
@@ -14,6 +14,9 @@ The current public foundation has five layers:
 5. A Python publisher and SQS-compatible worker that deliver per-item outbox
    events, lease work, persist outputs, and recover from duplicate delivery or
    interrupted processes.
+6. A React/TypeScript portal that registers source metadata, submits Bloom-targeted
+   batches, monitors progress, records researcher decisions, and exports approved
+   questions.
 
 Keeping validation outside the notebooks gives every entry point the same rules
 for answer uniqueness, Bloom labels, shot counts, and evaluation flags. Database
@@ -23,8 +26,10 @@ event per item in one transaction. A request fingerprint makes idempotent retrie
 safe while rejecting accidental key reuse with a different payload. The publisher
 and worker use expiring database leases; the worker records the logical outbox event
 ID in the same transaction as the generated question so a redelivery cannot create
-a second result. See `docs/api.md`, `docs/database.md`, and `docs/worker.md` for the
-contracts and failure behavior.
+a second result. The portal hashes selected files locally and sends only metadata;
+Nginx serves its static bundle and proxies `/api` to the TypeScript service. See
+`docs/api.md`, `docs/database.md`, `docs/worker.md`, and
+`docs/researcher-portal.md` for the contracts and failure behavior.
 
 ## Planned application boundary
 
@@ -32,7 +37,7 @@ The production extension will keep research inference in Python while separating
 interactive requests from long-running generation work:
 
 ```text
-React researcher portal             (planned)
+React researcher portal             (implemented and interaction tested)
         |
 Node.js/TypeScript API               (implemented)
         |
@@ -45,6 +50,7 @@ SQS-compatible queue -- Python worker (implemented and integration tested)
 
 The repository tests SQS semantics locally with Moto; it does not provision an AWS
 queue or deploy a worker. The deterministic provider validates orchestration and
-recovery without claiming production-quality question generation. The portal,
-model adapter, evaluation pipeline, and AWS runtime remain target components and
-will move to the implemented boundary only with code and integration tests.
+recovery without claiming production-quality question generation. Authentication,
+direct source upload, a production model adapter, the evaluation pipeline, and the
+AWS runtime remain target components and will move to the implemented boundary
+only with code and integration tests.

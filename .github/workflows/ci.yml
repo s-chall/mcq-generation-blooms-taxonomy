@@ -32,8 +32,8 @@ jobs:
       - name: Verify schema, constraints, indexes, and queries
         run: make db-test
 
-  node-api:
-    name: Node.js API and PostgreSQL integration
+  node-application:
+    name: TypeScript API, React portal, and PostgreSQL integration
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -43,14 +43,16 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
-      - name: Compile and run request-level tests
+      - name: Compile and run API and portal tests
         run: make api-test
+      - name: Build the production portal bundle
+        run: make web-build
       - name: Run API integration tests against PostgreSQL
         run: make api-integration-test
-      - name: Build the production API image
-        run: docker compose --profile application build api
-      - name: Audit production dependencies
-        run: npm audit --omit=dev
+      - name: Build and smoke-test the production application stack
+        run: make application-smoke-test
+      - name: Audit locked dependencies
+        run: npm audit
 
   python-worker:
     name: Python worker failure recovery
