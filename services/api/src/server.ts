@@ -1,14 +1,9 @@
 import { buildApp } from "./app.js";
 import { PostgresJobRepository } from "./postgres-repository.js";
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL must be set");
-}
-
 const port = Number(process.env.PORT ?? "3000");
 const host = process.env.HOST ?? "0.0.0.0";
-const repository = PostgresJobRepository.fromConnectionString(databaseUrl);
+const repository = PostgresJobRepository.fromEnvironment();
 const app = buildApp(repository, true);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

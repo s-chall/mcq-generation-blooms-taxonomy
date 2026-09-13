@@ -1,9 +1,23 @@
 #!/bin/sh
 set -eu
 
-: "${DATABASE_URL:?DATABASE_URL must be set}"
+if [ -z "${DATABASE_URL:-}" ]; then
+    : "${PGHOST:?PGHOST must be set when DATABASE_URL is absent}"
+    : "${PGPORT:?PGPORT must be set when DATABASE_URL is absent}"
+    : "${PGDATABASE:?PGDATABASE must be set when DATABASE_URL is absent}"
+    : "${PGUSER:?PGUSER must be set when DATABASE_URL is absent}"
+    : "${PGPASSWORD:?PGPASSWORD must be set when DATABASE_URL is absent}"
+fi
 
-psql --set=ON_ERROR_STOP=1 "$DATABASE_URL" <<'SQL'
+run_psql() {
+    if [ -n "${DATABASE_URL:-}" ]; then
+        psql "$@" "$DATABASE_URL"
+    else
+        psql "$@"
+    fi
+}
+
+run_psql --set=ON_ERROR_STOP=1 <<'SQL'
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version text PRIMARY KEY,
     applied_at timestamptz NOT NULL DEFAULT now()
@@ -21,7 +35,7 @@ for migration in db/migrations/*.sql; do
     esac
 
     applied=$(
-        psql --tuples-only --no-align "$DATABASE_URL" \
+        run_psql --tuples-only --no-align \
             --command="SELECT 1 FROM schema_migrations WHERE version = '$version'"
     )
     if [ "$applied" = "1" ]; then
@@ -35,5 +49,5 @@ for migration in db/migrations/*.sql; do
         sed -e '$a\' "$migration"
         printf "INSERT INTO schema_migrations (version) VALUES ('%s');\n" "$version"
         printf 'COMMIT;\n'
-    } | psql --set=ON_ERROR_STOP=1 "$DATABASE_URL"
+    } | run_psql --set=ON_ERROR_STOP=1
 done

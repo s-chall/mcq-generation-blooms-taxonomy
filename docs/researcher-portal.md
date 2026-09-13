@@ -68,5 +68,6 @@ health checks, and verifies both the rendered page and Nginx-to-API proxy.
 This is a research workflow, not a production identity or storage system. Reviewer
 IDs are caller-supplied, source bytes are not uploaded, and authorization is not
 implemented. Question-text editing, IWF evaluation display, retry controls, live
-status polling, browser-to-live-stack end-to-end tests, and AWS deployment remain
-future changes.
+status polling, and browser-to-live-stack end-to-end tests remain future changes.
+The portal has an AWS task definition and deployment workflow, but a live AWS run
+remains unverified.

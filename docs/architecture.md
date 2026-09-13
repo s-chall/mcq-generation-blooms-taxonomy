@@ -31,7 +31,7 @@ Nginx serves its static bundle and proxies `/api` to the TypeScript service. See
 `docs/api.md`, `docs/database.md`, `docs/worker.md`, and
 `docs/researcher-portal.md` for the contracts and failure behavior.
 
-## Planned application boundary
+## Application boundary
 
 The production extension will keep research inference in Python while separating
 interactive requests from long-running generation work:
@@ -48,9 +48,45 @@ SQS-compatible queue -- Python worker (implemented and integration tested)
       production model adapter        (planned)
 ```
 
-The repository tests SQS semantics locally with Moto; it does not provision an AWS
-queue or deploy a worker. The deterministic provider validates orchestration and
-recovery without claiming production-quality question generation. Authentication,
-direct source upload, a production model adapter, the evaluation pipeline, and the
-AWS runtime remain target components and will move to the implemented boundary
-only with code and integration tests.
+The deterministic provider validates orchestration and recovery without claiming
+production-quality question generation. Authentication, direct source upload, a
+production model adapter, and the automated evaluation pipeline remain target
+components and will move to the implemented boundary only with code and tests.
+
+## AWS runtime boundary
+
+Terraform maps the same containers and delivery contract to an AWS demo runtime:
+
+```text
+Internet -> Application Load Balancer -> ECS Fargate task
+                                      web :8080 -> API :3000
+                                                        |
+                                                        v
+                                              private Amazon RDS
+                                                        ^
+                                                        |
+API outbox -> publisher task -> Amazon SQS -> worker task
+                                  | retries
+                                  v
+                              dead-letter queue -> CloudWatch alarm
+```
+
+The API and portal share one Fargate task so Nginx can proxy to the API over the
+task loopback interface. Publisher and worker processes use separate Fargate
+services and least-privilege task roles. RDS has no public route and accepts port
+5432 only from the application and worker security groups. ECS injects the
+RDS-managed username and password from Secrets Manager; neither Terraform state
+nor GitHub stores the generated password.
+
+The load balancer is the only inbound public boundary. Demo tasks run in public
+subnets with public IP addresses to avoid a NAT gateway, but have no inbound
+security-group rules except load-balancer traffic to the application task. This
+is a deliberate cost tradeoff, not the recommended production topology. A
+production environment should use private application subnets, VPC endpoints or
+controlled NAT egress, HTTPS with a managed certificate, authentication, and RDS
+deletion protection.
+
+The repository now contains this runtime as tested infrastructure-as-code and a
+manual, OIDC-authenticated deployment workflow. It does not claim a live AWS
+deployment until the workflow has created the resources and passed the public
+readiness check. See `docs/aws-deployment.md` for that evidence boundary.

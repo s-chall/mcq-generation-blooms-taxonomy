@@ -57,9 +57,13 @@ docker build --file services/worker/Dockerfile --tag blooms-worker:test .
 
 ## Runtime configuration
 
-Both roles require `DATABASE_URL` and `SQS_QUEUE_URL`. `AWS_REGION` defaults to
-`us-east-1`; `AWS_ENDPOINT_URL` is optional for an SQS-compatible local endpoint;
-and `INSTANCE_ID` defaults to the container hostname.
+Both roles require `SQS_QUEUE_URL` and either `DATABASE_URL` or the standard
+`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD` fields. The AWS task
+definition uses the field-based form so ECS can inject the RDS-managed username
+and password directly from Secrets Manager. `PGSSLMODE=require` enables encrypted
+database transport in AWS. `AWS_REGION` defaults to `us-east-1`;
+`AWS_ENDPOINT_URL` is optional for an SQS-compatible local endpoint; and
+`INSTANCE_ID` defaults to the container hostname.
 
 Run one publisher or worker iteration with:
 
@@ -68,7 +72,12 @@ python -m generation_worker publisher --once
 python -m generation_worker worker --once
 ```
 
-Omit `--once` for the long-running process. In an AWS deployment, use IAM-provided
-credentials instead of committing access keys. Queue creation, IAM policies, a
-dead-letter queue, deployment, and production model credentials are deliberately
-outside this change and remain required before claiming an AWS deployment.
+Omit `--once` for the long-running process. The Terraform deployment uses
+IAM-provided task credentials and includes the encrypted queue, bounded redrive to
+a dead-letter queue, a dead-letter CloudWatch alarm, and separate publisher and
+consumer permissions. No access key is committed or passed to a container.
+
+Those controls are validated as code; live ECS/SQS failure recovery remains
+unverified until the AWS deployment workflow has run. The local PostgreSQL/Moto
+suite remains the executable evidence for the delivery windows above. Production
+model credentials and a provider adapter are still outside the current scope.

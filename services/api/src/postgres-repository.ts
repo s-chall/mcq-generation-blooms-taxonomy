@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { Pool, type PoolClient, type QueryResultRow } from "pg";
+import { Pool, type PoolClient, type PoolConfig, type QueryResultRow } from "pg";
 
 import {
   type CreateJobInput,
@@ -180,6 +180,12 @@ export class PostgresJobRepository implements JobRepository {
     return new PostgresJobRepository(new Pool({ connectionString, max: 10 }));
   }
 
+  public static fromEnvironment(
+    environment: NodeJS.ProcessEnv = process.env,
+  ): PostgresJobRepository {
+    return new PostgresJobRepository(new Pool(databasePoolConfig(environment)));
+  }
+
   public async checkReadiness(): Promise<void> {
     await this.pool.query("SELECT 1");
   }
@@ -353,4 +359,30 @@ export class PostgresJobRepository implements JobRepository {
   public async close(): Promise<void> {
     await this.pool.end();
   }
+}
+
+export function databasePoolConfig(environment: NodeJS.ProcessEnv): PoolConfig {
+  if (environment.DATABASE_URL) {
+    return { connectionString: environment.DATABASE_URL, max: 10 };
+  }
+
+  const required = ["PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD"] as const;
+  for (const name of required) {
+    if (!environment[name]) throw new Error(`${name} must be set when DATABASE_URL is absent`);
+  }
+
+  const port = Number(environment.PGPORT);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error("PGPORT must be a valid TCP port");
+  }
+
+  return {
+    host: environment.PGHOST,
+    port,
+    database: environment.PGDATABASE,
+    user: environment.PGUSER,
+    password: environment.PGPASSWORD,
+    ssl: environment.PGSSLMODE === "require" ? { rejectUnauthorized: false } : undefined,
+    max: 10,
+  };
 }

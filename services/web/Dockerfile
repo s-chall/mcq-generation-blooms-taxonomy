@@ -11,7 +11,8 @@ RUN npm run build --workspace @blooms/web
 
 FROM nginxinc/nginx-unprivileged:1.29.5-alpine
 
+ENV API_UPSTREAM=api:3000
 COPY --from=build /app/services/web/dist /usr/share/nginx/html
-COPY services/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY services/web/nginx.conf.template /etc/nginx/templates/default.conf.template
 
 EXPOSE 8080
