@@ -11,7 +11,7 @@ before any model inference begins.
 | `GET` | `/health/live` | Process liveness; does not depend on PostgreSQL. |
 | `GET` | `/health/ready` | Returns `200` only when PostgreSQL accepts a query. |
 | `POST` | `/v1/sources` | Registers or reuses a source by its SHA-256 content hash. |
-| `POST` | `/v1/jobs` | Creates a queued generation job, work items, and an outbox event. |
+| `POST` | `/v1/jobs` | Creates a queued generation job, work items, and one outbox event per item. |
 | `GET` | `/v1/jobs/:id` | Returns job metadata and work-item counts by status. |
 
 `POST /v1/jobs` requires an `Idempotency-Key` header between 8 and 128
@@ -24,10 +24,11 @@ with the key:
 - concurrent identical submissions are serialized with a transaction-scoped
   PostgreSQL advisory lock.
 
-The job, its requested work items, and the `generation_job.created` outbox event
-are committed in one transaction. A queue publisher added in a later change can
-therefore retry publication without losing a committed job or publishing work
-for a rolled-back job.
+The job, its requested work items, and their `generation_job_item.created` outbox
+events are committed in one transaction. The publisher can therefore retry
+publication without losing a committed item or publishing work for a rolled-back
+job. Each event carries its logical event ID to SQS so the worker can deduplicate a
+redelivery.
 
 ## Run locally
 
@@ -81,6 +82,8 @@ curl --request POST http://localhost:3000/v1/jobs \
 
 ## Deliberate boundary
 
-This API does not yet publish outbox events, run Python generation workers,
-authenticate researchers, accept file bytes, or expose question review and export
-routes. Those remain planned and are not represented as implemented features.
+The adjacent Python service publishes these outbox events and processes them with
+an SQS-compatible queue. The API still does not authenticate researchers, accept
+file bytes, or expose question review and export routes. The worker uses a local
+deterministic provider rather than a production model. Those capabilities remain
+planned and are not represented as implemented features.

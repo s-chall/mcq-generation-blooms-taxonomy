@@ -185,14 +185,21 @@ export class PostgresJobRepository implements JobRepository {
       `, [jobId, levels]);
 
       await client.query(`
-        INSERT INTO outbox_events (
-          aggregate_type,
-          aggregate_id,
-          event_type,
-          payload
-        )
-        VALUES ('generation_job', $1, 'generation_job.created', $2::jsonb)
-      `, [jobId, JSON.stringify({ jobId, itemCount: input.requestedCount })]);
+        INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload)
+        SELECT
+          'job_item',
+          item.id,
+          'generation_job_item.created',
+          jsonb_build_object(
+            'itemId', item.id,
+            'jobId', item.job_id,
+            'ordinal', item.ordinal,
+            'targetBloom', item.target_bloom
+          )
+        FROM job_items AS item
+        WHERE item.job_id = $1
+        ORDER BY item.ordinal
+      `, [jobId]);
 
       const job = await selectJob(client, jobId);
       await client.query("COMMIT");

@@ -51,3 +51,24 @@ jobs:
         run: docker compose --profile application build api
       - name: Audit production dependencies
         run: npm audit --omit=dev
+
+  python-worker:
+    name: Python worker failure recovery
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.33"
+          enable-cache: true
+      - name: Install locked worker dependencies
+        run: uv sync --frozen
+      - name: Run worker state-machine tests
+        run: make worker-test
+      - name: Force duplicate delivery, retry, and interruption paths
+        run: make worker-integration-test
+      - name: Build the production worker image
+        run: docker build --file services/worker/Dockerfile --tag blooms-worker:test .

@@ -4,6 +4,15 @@ version = "0.1.0"
 description = "Reproducible validation and summary analysis for Bloom-aligned MCQ data"
 readme = "README.md"
 requires-python = ">=3.11"
+dependencies = [
+    "boto3>=1.40,<2",
+    "psycopg[binary]>=3.2,<4",
+]
+
+[dependency-groups]
+dev = [
+    "moto[sqs]>=5.1,<6",
+]
 
 [tool.uv]
 package = false

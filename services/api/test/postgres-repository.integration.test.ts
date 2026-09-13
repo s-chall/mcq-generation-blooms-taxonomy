@@ -32,7 +32,7 @@ before(async () => {
 
 after(async () => app.close());
 
-test("creates a job, work items, and outbox event in one transaction", async () => {
+test("creates a job, work items, and per-item outbox events in one transaction", async () => {
   const sourceResponse = await app.inject({
     method: "POST",
     url: "/v1/sources",
@@ -82,9 +82,9 @@ test("creates a job, work items, and outbox event in one transaction", async () 
   const outbox = await pool.query<{ count: string }>(`
     SELECT count(*) AS count
     FROM outbox_events
-    WHERE aggregate_id = $1 AND event_type = 'generation_job.created'
+    WHERE payload->>'jobId' = $1 AND event_type = 'generation_job_item.created'
   `, [first.id]);
-  assert.equal(Number(outbox.rows[0]!.count), 1);
+  assert.equal(Number(outbox.rows[0]!.count), 3);
 
   const [retryA, retryB] = await Promise.all([
     repository.createJob({ ...input, targetBlooms: [...input.targetBlooms] }),
@@ -141,5 +141,5 @@ test("creates a job, work items, and outbox event in one transaction", async () 
       (SELECT count(*) FROM job_items) AS items,
       (SELECT count(*) FROM outbox_events) AS events
   `);
-  assert.deepEqual(totals.rows[0], { jobs: "1", items: "3", events: "1" });
+  assert.deepEqual(totals.rows[0], { jobs: "1", items: "3", events: "3" });
 });

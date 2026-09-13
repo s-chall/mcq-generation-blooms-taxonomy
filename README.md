@@ -5,9 +5,9 @@ and evaluating Bloom's-Taxonomy-aligned multiple-choice questions in introductor
 chemistry and biology.
 
 > **Current status:** This repository validates and summarizes its public demo
-> dataset and implements a tested TypeScript job API backed by PostgreSQL. The
-> asynchronous workers, message queue, web interface, and cloud deployment in the
-> roadmap are not implemented yet.
+> dataset and implements a tested TypeScript job API plus an SQS-compatible Python
+> worker backed by PostgreSQL. The worker uses a deterministic offline provider;
+> a production model adapter, web interface, and cloud deployment remain planned.
 
 ## Research question
 
@@ -80,6 +80,18 @@ Run the API against an isolated PostgreSQL instance:
 make api-integration-test
 ```
 
+Run the worker unit tests and the PostgreSQL/SQS failure-injection suite:
+
+```bash
+make worker-test
+make worker-integration-test
+```
+
+The integration suite deliberately interrupts the publisher after queue delivery,
+interrupts a worker after its database commit, expires a dead worker's lease, and
+replays a failed provider call. See the [worker guide](docs/worker.md) for the
+delivery contract and local runtime configuration.
+
 See the [job API guide](docs/api.md) for the endpoint contract, idempotency
 behavior, container startup, and example requests.
 
@@ -92,6 +104,10 @@ behavior, container startup, and example requests.
 - `db/queries/` — worker-safe operational SQL and research summary queries.
 - `db/tests/` — constraint, deduplication, index, and query integration tests.
 - `services/api/` — TypeScript HTTP API, PostgreSQL repository, and tests.
+- `generation_worker/` — Python outbox publisher, SQS consumer, leased work-item
+  processor, and deterministic local provider.
+- `services/worker/` — non-root production worker image.
+- `worker_tests/` — unit and PostgreSQL/SQS failure-injection tests.
 - `notebooks/` — local, repository-relative examples without private Drive paths.
 - `tests/` — contract and regression tests, including detection of the duplicated
   answer choices in the legacy sample.
@@ -99,6 +115,8 @@ behavior, container startup, and example requests.
 - `docs/architecture.md` — implemented boundary and planned application design.
 - `docs/database.md` — schema decisions, query behavior, and index rationale.
 - `docs/api.md` — endpoints, transaction and idempotency rules, and local use.
+- `docs/worker.md` — queue delivery, leases, retries, deduplication, and failure
+  recovery.
 - `docs/resume-evidence.md` — claim-by-claim evidence ledger updated with each PR.
 - `poster/poster.png` — conference poster associated with the research.
 
@@ -115,12 +133,13 @@ dataset.
 
 ## Application roadmap
 
-The versioned PostgreSQL model, transactional outbox schema, and Node.js/TypeScript
-job-submission API are implemented. The intended product extension will generate
-batches asynchronously, inspect Bloom and IWF evaluations, review or edit questions,
-retry failed work, and export approved questions. The target system also includes a
-React/TypeScript portal, message queue, and idempotent Python workers deployed as
-containers.
+The versioned PostgreSQL model, transactional outbox, Node.js/TypeScript
+job-submission API, SQS-compatible publisher, and idempotent Python worker are
+implemented. The worker currently proves orchestration and recovery with a
+deterministic provider; connecting a production generation/evaluation model is a
+separate change. The intended product extension will inspect Bloom and IWF
+evaluations, review or edit questions, retry failed work, and export approved
+questions through a React/TypeScript portal deployed on AWS.
 
 Planned features are documented as plans until working code and integration tests
 are merged. See the [architecture note](docs/architecture.md).

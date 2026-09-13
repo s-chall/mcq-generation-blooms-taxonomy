@@ -4,3 +4,4 @@
 node_modules
 services/api/dist
 work
+.uv-cache
